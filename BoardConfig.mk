@@ -31,6 +31,7 @@ TARGET_USES_FOD_ZPOS := true
 
 # Kernel
 TARGET_KERNEL_CONFIG += vendor/laurel_sprout.config
+BOARD_KERNEL_CMDLINE += androidboot.boot_devices=soc/4804000.ufshc
 
 # Partitions
 BOARD_SYSTEMIMAGE_PARTITION_SIZE := 3221225472
