@@ -11,10 +11,10 @@
 #include <aidl/android/hardware/biometrics/fingerprint/BnFingerprint.h>
 #include <android-base/logging.h>
 #include <fcntl.h>
-#include <fstream>
 #include <poll.h>
-#include <thread>
 #include <unistd.h>
+#include <fstream>
+#include <thread>
 
 #define COMMAND_NIT 10
 #define PARAM_NIT_FOD 1
@@ -58,7 +58,7 @@ static bool readBool(int fd) {
 
 class LaurelSproutUdfpsHandler : public UdfpsHandler {
   public:
-    void init(fingerprint_device_t *device) {
+    void init(fingerprint_device_t* device) {
         mDevice = device;
 
         std::thread([this]() {
@@ -128,8 +128,9 @@ class LaurelSproutUdfpsHandler : public UdfpsHandler {
     void cancel() {
         // nothing
     }
+
   private:
-    fingerprint_device_t *mDevice;
+    fingerprint_device_t* mDevice;
 };
 
 static UdfpsHandler* create() {
@@ -141,6 +142,6 @@ static void destroy(UdfpsHandler* handler) {
 }
 
 extern "C" UdfpsHandlerFactory UDFPS_HANDLER_FACTORY = {
-    .create = create,
-    .destroy = destroy,
+        .create = create,
+        .destroy = destroy,
 };
