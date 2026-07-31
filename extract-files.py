@@ -30,6 +30,9 @@ lib_fixups: lib_fixups_user_type = {
 blob_fixups: blob_fixups_user_type = {
     'vendor/lib/miwatermark.so': blob_fixup()
         .add_needed('libpiex_shim.so'),
+    # get_force_path() stores "/dev/input" without a terminating NUL.
+    'vendor/lib64/hw/fingerprint.goodix_fod.default.so': blob_fixup()
+        .sig_replace('e9 d3 00 79', 'e9 6b 00 b9'),
     'vendor/lib64/libvendor.goodix.hardware.biometrics.fingerprint@2.1.so': blob_fixup()
         .remove_needed('libhidlbase.so')
         .replace_needed('libhidltransport.so', 'libhidlbase-v32.so'),
