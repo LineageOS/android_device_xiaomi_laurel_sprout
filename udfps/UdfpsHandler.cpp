@@ -11,10 +11,10 @@
 #include <aidl/android/hardware/biometrics/fingerprint/BnFingerprint.h>
 #include <android-base/logging.h>
 #include <fcntl.h>
-#include <fstream>
 #include <poll.h>
-#include <thread>
 #include <unistd.h>
+#include <fstream>
+#include <thread>
 
 #define COMMAND_NIT 10
 #define PARAM_NIT_FOD 1
@@ -33,9 +33,7 @@ static const char* kFodUiPaths[] = {
         "/sys/devices/platform/soc/soc:qcom,dsi-display/fod_ui",
 };
 
-static const char* kFodStatusPaths[] = {
-        "/sys/class/touch/tp_dev/fod_status",
-};
+static const char* kFodStatusPath = "/sys/class/touch/tp_dev/fod_status";
 
 static bool readBool(int fd) {
     char c;
@@ -58,7 +56,7 @@ static bool readBool(int fd) {
 
 class LaurelSproutUdfpsHandler : public UdfpsHandler {
   public:
-    void init(fingerprint_device_t *device) {
+    void init(fingerprint_device_t* device) {
         mDevice = device;
 
         std::thread([this]() {
@@ -71,16 +69,15 @@ class LaurelSproutUdfpsHandler : public UdfpsHandler {
             }
 
             if (fd < 0) {
-                LOG(ERROR) << "failed to open fd, err: " << fd;
+                LOG(ERROR) << "failed to open fod_ui, err: " << fd;
                 return;
             }
 
             int fodStatusFd;
-            for (auto& path : kFodStatusPaths) {
-                fodStatusFd = open(path, O_RDWR);
-                if (fodStatusFd >= 0) {
-                    break;
-                }
+            fodStatusFd = open(kFodStatusPath, O_RDWR);
+            if (fodStatusFd < 0) {
+                LOG(ERROR) << "failed to open fod_status, err: " << fd;
+                return;
             }
 
             struct pollfd fodUiPoll = {
@@ -114,22 +111,38 @@ class LaurelSproutUdfpsHandler : public UdfpsHandler {
     }
 
     void onAcquired(int32_t result, int32_t vendorCode) {
-        if (static_cast<AcquiredInfo>(result) == AcquiredInfo::GOOD) {
-            set(kFodStatusPaths[0], 0);
-        } else if (vendorCode == 23) {
-            /*
-             * vendorCode = 23 waiting for fingerprint authentication on popups
-             */
-            mDevice->extCmd(mDevice, COMMAND_NIT, PARAM_NIT_FOD);
-            set(kFodStatusPaths[0], 1);
+        if (static_cast<AcquiredInfo>(result) == AcquiredInfo::VENDOR) {
+            if (vendorCode == 22) {
+                /*
+                 * vendorCode = 22 onFingerDown
+                 */
+                mDevice->extCmd(mDevice, COMMAND_NIT, PARAM_NIT_FOD);
+                set(kFodStatusPath, 1);
+            }
+
+            if (vendorCode == 23) {
+                /*
+                 * vendorCode = 23 onFingerUp
+                 */
+                mDevice->extCmd(mDevice, COMMAND_NIT, PARAM_NIT_NONE);
+                set(kFodStatusPath, 0);
+            }
         }
     }
 
-    void cancel() {
-        // nothing
-    }
+    void onAuthenticationSucceeded() override { finishAuthentication(); }
+
+    void onAuthenticationFailed() override { finishAuthentication(); }
+
+    void cancel() { finishAuthentication(); }
+
   private:
-    fingerprint_device_t *mDevice;
+    void finishAuthentication() {
+        mDevice->extCmd(mDevice, COMMAND_NIT, PARAM_NIT_NONE);
+        set(kFodStatusPath, 0);
+    }
+
+    fingerprint_device_t* mDevice;
 };
 
 static UdfpsHandler* create() {
@@ -141,6 +154,6 @@ static void destroy(UdfpsHandler* handler) {
 }
 
 extern "C" UdfpsHandlerFactory UDFPS_HANDLER_FACTORY = {
-    .create = create,
-    .destroy = destroy,
+        .create = create,
+        .destroy = destroy,
 };
