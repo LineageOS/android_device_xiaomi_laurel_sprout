@@ -33,9 +33,7 @@ static const char* kFodUiPaths[] = {
         "/sys/devices/platform/soc/soc:qcom,dsi-display/fod_ui",
 };
 
-static const char* kFodStatusPaths[] = {
-        "/sys/class/touch/tp_dev/fod_status",
-};
+static const char* kFodStatusPath = "/sys/class/touch/tp_dev/fod_status";
 
 static bool readBool(int fd) {
     char c;
@@ -71,16 +69,14 @@ class LaurelSproutUdfpsHandler : public UdfpsHandler {
             }
 
             if (fd < 0) {
-                LOG(ERROR) << "failed to open fd, err: " << fd;
+                LOG(ERROR) << "failed to open fod_ui, err: " << fd;
                 return;
             }
 
-            int fodStatusFd;
-            for (auto& path : kFodStatusPaths) {
-                fodStatusFd = open(path, O_RDWR);
-                if (fodStatusFd >= 0) {
-                    break;
-                }
+            int fodStatusFd = open(kFodStatusPath, O_RDWR);
+            if (fodStatusFd < 0) {
+                LOG(ERROR) << "failed to open fod_status, err: " << fd;
+                return;
             }
 
             struct pollfd fodUiPoll = {
@@ -96,10 +92,11 @@ class LaurelSproutUdfpsHandler : public UdfpsHandler {
                     continue;
                 }
 
+                bool fodUiEnabled = readBool(fd);
                 mDevice->extCmd(mDevice, COMMAND_NIT,
-                                readBool(fd) ? PARAM_NIT_FOD : PARAM_NIT_NONE);
+                                fodUiEnabled ? PARAM_NIT_FOD : PARAM_NIT_NONE);
                 if (fodStatusFd >= 0) {
-                    write(fodStatusFd, readBool(fd) ? "1" : "0", 1);
+                    write(fodStatusFd, fodUiEnabled ? "1" : "0", 1);
                 }
             }
         }).detach();
@@ -114,22 +111,35 @@ class LaurelSproutUdfpsHandler : public UdfpsHandler {
     }
 
     void onAcquired(int32_t result, int32_t vendorCode) {
-        if (static_cast<AcquiredInfo>(result) == AcquiredInfo::GOOD) {
-            set(kFodStatusPaths[0], 0);
-        } else if (vendorCode == 23) {
-            /*
-             * vendorCode = 23 waiting for fingerprint authentication on popups
-             */
-            mDevice->extCmd(mDevice, COMMAND_NIT, PARAM_NIT_FOD);
-            set(kFodStatusPaths[0], 1);
+        if (static_cast<AcquiredInfo>(result) == AcquiredInfo::VENDOR) {
+            if (vendorCode == 22) {
+                /*
+                 * vendorCode = 22 onFingerDown
+                 */
+                mDevice->extCmd(mDevice, COMMAND_NIT, PARAM_NIT_FOD);
+                set(kFodStatusPath, 1);
+            } else if (vendorCode == 23) {
+                /*
+                 * vendorCode = 23 onFingerUp
+                 */
+                mDevice->extCmd(mDevice, COMMAND_NIT, PARAM_NIT_NONE);
+                set(kFodStatusPath, 0);
+            }
         }
     }
 
-    void cancel() {
-        // nothing
-    }
+    void onAuthenticationSucceeded() override { finishAuthentication(); }
+
+    void onAuthenticationFailed() override { finishAuthentication(); }
+
+    void cancel() { finishAuthentication(); }
 
   private:
+    void finishAuthentication() {
+        mDevice->extCmd(mDevice, COMMAND_NIT, PARAM_NIT_NONE);
+        set(kFodStatusPath, 0);
+    }
+
     fingerprint_device_t* mDevice;
 };
 
