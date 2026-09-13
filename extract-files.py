@@ -27,6 +27,16 @@ lib_fixups: lib_fixups_user_type = {
     **lib_fixups,
 }
 
+_displayservice_ping = (
+    b'_ZN7lineage10frameworks14displayservice4V1_014IEventCallback4pingEv'
+)
+_displayservice_unresolved = (
+    rb'_ZN7lineage10frameworks14displayservice4V1_01[45]I[A-Za-z0-9_]*'
+    rb'(?:linkToDeath|unlinkToDeath|getDebugInfo|getHashChain|'
+    rb'interfaceChain|interfaceDescriptor|5debug|registerForNotifications)'
+    rb'[A-Za-z0-9_]*'
+)
+
 blob_fixups: blob_fixups_user_type = {
     'vendor/lib/miwatermark.so': blob_fixup()
         .add_needed('libpiex_shim.so'),
@@ -49,6 +59,15 @@ blob_fixups: blob_fixups_user_type = {
         .clear_symbol_version('remote_handle_close')
         .clear_symbol_version('remote_handle_invoke')
         .clear_symbol_version('remote_handle_open'),
+    'vendor/lib/hw/camera.trinket.so': blob_fixup()
+        .replace_needed('android.frameworks.displayservice@1.0.so',
+                        'lineage.frameworks.displayservice@1.0.so')
+        .binary_regex_replace(
+            b'7android10frameworks14displayservice',
+            b'7lineage10frameworks14displayservice')
+        .binary_regex_replace(
+            _displayservice_unresolved,
+            lambda m: _displayservice_ping.ljust(len(m.group(0)), b'\x00')),
 }  # fmt: skip
 
 module = ExtractUtilsModule(
